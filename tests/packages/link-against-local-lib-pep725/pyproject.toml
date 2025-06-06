@@ -10,4 +10,4 @@ requires = ['meson-python']
 allow-windows-internal-shared-libs = true
 
 [external]
-build-requires = ['dep:virtual/compiler/c']
+build-requires = ['dep:virtual/compiler/c', 'dep:generic/pkg-config']
