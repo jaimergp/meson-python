@@ -132,7 +132,8 @@ class VEnv(EnvBuilder):
 class CondaEnv:
     def __init__(self, env_dir: pathlib.Path):
         self._env_dir = env_dir
-        subprocess.run(["micromamba", "create", "--prefix", env_dir, "python", "pip"])
+        pyver = f"{sys.version_info.major}.{sys.version_info.minor}"
+        subprocess.run(["micromamba", "create", "--prefix", env_dir, f"python={pyver}", "pip"])
         if sys.platform == "win32":
             self.executable = env_dir / "python.exe"
         else:
