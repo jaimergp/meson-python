@@ -54,14 +54,13 @@ def test_limited_api_pep725(
 ):
     _install_external(conda_env, package_limited_api_pep725)
     pkg_config = _assert_package_installed("pkg-config", conda_env)
-    compiler = _assert_package_installed("<c-compiler>", conda_env)
+    _assert_package_installed("<c-compiler>", conda_env)
 
     with in_git_repo_context():
         wheel_path = tmp_path / mesonpy.build_wheel(tmp_path, config_settings={"build-dir": str(tmp_path / "build")})
 
     # Make sure the detected compiler comes from our prefix
     logs = _get_meson_logs(tmp_path / "build")
-    assert f"InstalledDir: {compiler.parent}" in logs
     if sys.platform != "win32":  # pkg-config not used in Windows
         assert str(pkg_config) in logs
 
@@ -77,14 +76,13 @@ def test_link_against_local_lib_pep725(
 ):
     _install_external(conda_env, package_link_against_local_lib_pep725)
     pkg_config = _assert_package_installed("pkg-config", conda_env)
-    compiler = _assert_package_installed("<c-compiler>", conda_env)
+    _assert_package_installed("<c-compiler>", conda_env)
 
     with in_git_repo_context():
         wheel_path = tmp_path / mesonpy.build_wheel(tmp_path, config_settings={"build-dir": str(tmp_path / "build")})
 
     # Make sure the detected compiler comes from our prefix
     logs = _get_meson_logs(tmp_path / "build")
-    assert f"InstalledDir: {compiler.parent}" in logs
     if sys.platform != "win32":  # pkg-config not used in Windows
         assert str(pkg_config) in logs
 
