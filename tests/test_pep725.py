@@ -27,22 +27,43 @@ def _install_external(
     return subprocess.run(cmd, check=True)
 
 
+def _assert_package_installed(package: str, prefix: Path) -> Path:
+    prefix = Path(str(prefix))
+    if package == "<c-compiler>":
+        if sys.platform.startswith("linux"):
+            pkg = (prefix / "bin" / "gcc").resolve()
+        elif sys.platform == "darwin":
+            pkg = (prefix / "bin" / "clang").resolve()
+    else:
+        pkg = shutil.which(package)
+    assert pkg is not None
+    pkg = Path(pkg)
+    assert pkg.is_file()
+    assert str(prefix) in str(pkg)
+    return pkg
+
+
+def _get_meson_logs(build_dir: Path) -> str:
+    return (build_dir / "meson-logs" / "meson-log.txt").read_text()
+
+
 def test_limited_api_pep725(
     tmp_path: Path,
     conda_env: CondaEnv,
     package_limited_api_pep725,
-    capfd: CaptureFixture[str],
 ):
     _install_external(conda_env, package_limited_api_pep725)
-    pkg_config = shutil.which("pkg-config")
-    assert pkg_config
-    assert str(conda_env) in pkg_config
+    pkg_config = _assert_package_installed("pkg-config", conda_env)
+    compiler = _assert_package_installed("<c-compiler>", conda_env)
 
     with in_git_repo_context():
-        wheel_path = tmp_path / mesonpy.build_wheel(tmp_path)
+        wheel_path = tmp_path / mesonpy.build_wheel(tmp_path, config_settings={"build-dir": str(tmp_path / "build")})
+
+    # Make sure the detected compiler comes from our prefix
+    logs = _get_meson_logs(tmp_path / "build")
+    assert f"InstalledDir: {compiler.parent}" in logs
     if sys.platform != "win32":  # pkg-config not used in Windows
-        out, err = capfd.readouterr()
-        assert pkg_config in out + err
+        assert str(pkg_config) in logs
 
     conda_env.pip("install", wheel_path)
     output = conda_env.python("-c", "import module; print(module.add(1, 2))")
@@ -53,18 +74,19 @@ def test_link_against_local_lib_pep725(
     tmp_path: Path,
     conda_env: CondaEnv,
     package_link_against_local_lib_pep725,
-    capfd: CaptureFixture[str],
 ):
     _install_external(conda_env, package_link_against_local_lib_pep725)
-    pkg_config = shutil.which("pkg-config")
-    assert pkg_config
-    assert str(conda_env) in pkg_config
+    pkg_config = _assert_package_installed("pkg-config", conda_env)
+    compiler = _assert_package_installed("<c-compiler>", conda_env)
 
     with in_git_repo_context():
-        wheel_path = tmp_path / mesonpy.build_wheel(tmp_path)
+        wheel_path = tmp_path / mesonpy.build_wheel(tmp_path, config_settings={"build-dir": str(tmp_path / "build")})
+
+    # Make sure the detected compiler comes from our prefix
+    logs = _get_meson_logs(tmp_path / "build")
+    assert f"InstalledDir: {compiler.parent}" in logs
     if sys.platform != "win32":  # pkg-config not used in Windows
-        out, err = capfd.readouterr()
-        assert pkg_config in out + err
+        assert str(pkg_config) in logs
 
     conda_env.pip("install", wheel_path, "-vvv")
 
