@@ -158,8 +158,30 @@ def venv(tmp_path_factory) -> VEnv:
 
 
 @pytest.fixture()
-def conda_env(tmp_path_factory) -> CondaEnv:
+def conda_env(tmp_path_factory, monkeypatch) -> CondaEnv:
     path = pathlib.Path(tmp_path_factory.mktemp('mesonpy-test-conda-env'))
+    if sys.platform == "win32":
+        monkeypatch.setenv(
+            "PATH",
+            os.pathsep.join(
+                [
+                    str(path),
+                    str(pathlib.Path(path , "Scripts")),
+                    str(pathlib.Path(path , "Library", "bin")),
+                    os.environ.get("PATH", ""),
+                ]
+            ),
+        )
+    else:
+        monkeypatch.setenv(
+            "PATH",
+            os.pathsep.join(
+                [
+                    str(pathlib.Path(path, "bin")),
+                    os.environ.get("PATH", ""),
+                ]
+            ),
+        )
     return CondaEnv(path)
 
 
