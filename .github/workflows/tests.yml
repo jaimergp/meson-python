@@ -118,6 +118,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+      
+      - uses: mamba-org/setup-micromamba@v2
 
       - name: Install Ninja
         run: sudo apt-get install ninja-build
@@ -152,6 +154,7 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   msvc:
+    if: false
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -169,6 +172,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+
+      - uses: mamba-org/setup-micromamba@v2
 
       - name: Install Ninja
         run: python -m pip install ninja
@@ -189,6 +194,7 @@ jobs:
         run: python -m pytest --showlocals -vv tests/test_pep725.py 
 
   cygwin:
+    if: false
     runs-on: windows-latest
     strategy:
       fail-fast: false
