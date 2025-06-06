@@ -35,6 +35,8 @@ def _assert_package_installed(package: str, prefix: Path) -> Path:
             pkg = (prefix / "bin" / "gcc")
         elif sys.platform == "darwin":
             pkg = next((prefix / "bin").glob(f"{platform.machine()}-*-clang"))
+        else:
+            return
     else:
         pkg = shutil.which(package)
     assert pkg is not None
@@ -56,7 +58,7 @@ def test_limited_api_pep725(
     _install_external(conda_env, package_limited_api_pep725)
     pkg_config = _assert_package_installed("pkg-config", conda_env)
     compiler = _assert_package_installed("<c-compiler>", conda_env)
-    resolved_compiler = compiler.resolve()
+    resolved_compiler = compiler.resolve() if compiler else None
 
     with in_git_repo_context():
         wheel_path = tmp_path / mesonpy.build_wheel(
@@ -83,7 +85,7 @@ def test_link_against_local_lib_pep725(
     _install_external(conda_env, package_link_against_local_lib_pep725)
     pkg_config = _assert_package_installed("pkg-config", conda_env)
     compiler = _assert_package_installed("<c-compiler>", conda_env)
-    resolved_compiler = compiler.resolve()
+    resolved_compiler = compiler.resolve() if compiler else None
 
     with in_git_repo_context():
         wheel_path = tmp_path / mesonpy.build_wheel(
