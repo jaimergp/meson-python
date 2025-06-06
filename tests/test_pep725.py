@@ -14,26 +14,27 @@ import mesonpy
 from .conftest import in_git_repo_context
 
 
-CONDA_PREFIX = os.environ.get("CONDA_PREFIX", os.environ.get("CONDA", sys.prefix))
-
-
-def _install_external(directory: Path, ecosystem: str = "conda-forge") -> subprocess.CompletedProcess:
+def _install_external(env_dir: Path, directory: Path, ecosystem: str = "conda-forge") -> subprocess.CompletedProcess:
     external = External.from_pyproject_path(directory / "pyproject.toml")
-    cmd = external.install_command(ecosystem=ecosystem, package_manager="conda")
-    env = os.environ.copy()
-    env.setdefault("CONDA_QUIET", "1")
-    return subprocess.run(cmd, check=True, env=env)
+    cmd = external.install_command(ecosystem=ecosystem, package_manager="micromamba")
+    cmd.append(f"--prefix={env_dir}")
+    return subprocess.run(cmd, check=True)
 
 
-def test_limited_api_pep725(tmp_path, venv, package_limited_api_pep725):
-    _install_external(package_limited_api_pep725)
-    assert Path(CONDA_PREFIX, "bin/clang").is_file()
+def test_limited_api_pep725(tmp_path, conda_env, package_limited_api_pep725):
+    _install_external(conda_env, package_limited_api_pep725)
+    if sys.platform.startswith("linux"):
+        assert Path(conda_env, "bin/gcc").is_file()
+    elif sys.platform == "darwin":
+        assert Path(conda_env, "bin/clang").is_file()
+    elif sys.platform == "win32":
+        pass  # compiler must be present in system separately
 
     with in_git_repo_context():
         wheel_path = tmp_path / mesonpy.build_wheel(tmp_path)
-    venv.pip("install", wheel_path)
+    conda_env.pip("install", wheel_path)
 
-    output = venv.python("-c", "import module; print(module.add(1, 2))")
+    output = conda_env.python("-c", "import module; print(module.add(1, 2))")
     assert int(output) == 3
 
 
