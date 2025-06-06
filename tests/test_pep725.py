@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2025 The meson-python developers
 #
 # SPDX-License-Identifier: MIT
+import platform
 import shutil
 import subprocess
 import sys
@@ -31,9 +32,9 @@ def _assert_package_installed(package: str, prefix: Path) -> Path:
     prefix = Path(str(prefix))
     if package == "<c-compiler>":
         if sys.platform.startswith("linux"):
-            pkg = (prefix / "bin" / "gcc").resolve()
+            pkg = (prefix / "bin" / "gcc")
         elif sys.platform == "darwin":
-            pkg = (prefix / "bin" / "clang").resolve()
+            pkg = next((prefix / "bin").glob(f"{platform.machine()}-*-clang"))
     else:
         pkg = shutil.which(package)
     assert pkg is not None
@@ -54,7 +55,8 @@ def test_limited_api_pep725(
 ):
     _install_external(conda_env, package_limited_api_pep725)
     pkg_config = _assert_package_installed("pkg-config", conda_env)
-    _assert_package_installed("<c-compiler>", conda_env)
+    compiler = _assert_package_installed("<c-compiler>", conda_env)
+    resolved_compiler = compiler.resolve()
 
     with in_git_repo_context():
         wheel_path = tmp_path / mesonpy.build_wheel(
@@ -65,6 +67,7 @@ def test_limited_api_pep725(
     # Make sure the detected compiler comes from our prefix
     logs = _get_meson_logs(tmp_path / "_build")
     if sys.platform != "win32":  # pkg-config not used in Windows
+        assert compiler.name in logs or resolved_compiler.name in logs
         assert str(pkg_config) in logs
 
     conda_env.pip("install", wheel_path)
@@ -79,7 +82,8 @@ def test_link_against_local_lib_pep725(
 ):
     _install_external(conda_env, package_link_against_local_lib_pep725)
     pkg_config = _assert_package_installed("pkg-config", conda_env)
-    _assert_package_installed("<c-compiler>", conda_env)
+    compiler = _assert_package_installed("<c-compiler>", conda_env)
+    resolved_compiler = compiler.resolve()
 
     with in_git_repo_context():
         wheel_path = tmp_path / mesonpy.build_wheel(
@@ -90,6 +94,7 @@ def test_link_against_local_lib_pep725(
     # Make sure the detected compiler comes from our prefix
     logs = _get_meson_logs(tmp_path / "_build")
     if sys.platform != "win32":  # pkg-config not used in Windows
+        assert compiler.name in logs or resolved_compiler.name in logs
         assert str(pkg_config) in logs
 
     conda_env.pip("install", wheel_path, "-vvv")
