@@ -8,9 +8,9 @@ import sys
 from pathlib import Path
 
 from pyproject_external import External
-from pytest import CaptureFixture
 
 import mesonpy
+
 from tests.conftest import CondaEnv
 
 from .conftest import in_git_repo_context
@@ -57,10 +57,13 @@ def test_limited_api_pep725(
     _assert_package_installed("<c-compiler>", conda_env)
 
     with in_git_repo_context():
-        wheel_path = tmp_path / mesonpy.build_wheel(tmp_path, config_settings={"build-dir": str(tmp_path / "build")})
+        wheel_path = tmp_path / mesonpy.build_wheel(
+            tmp_path,
+            config_settings={"build-dir": str(tmp_path / "_build")},
+        )
 
     # Make sure the detected compiler comes from our prefix
-    logs = _get_meson_logs(tmp_path / "build")
+    logs = _get_meson_logs(tmp_path / "_build")
     if sys.platform != "win32":  # pkg-config not used in Windows
         assert str(pkg_config) in logs
 
@@ -79,10 +82,13 @@ def test_link_against_local_lib_pep725(
     _assert_package_installed("<c-compiler>", conda_env)
 
     with in_git_repo_context():
-        wheel_path = tmp_path / mesonpy.build_wheel(tmp_path, config_settings={"build-dir": str(tmp_path / "build")})
+        wheel_path = tmp_path / mesonpy.build_wheel(
+            tmp_path,
+            config_settings={"build-dir": str(tmp_path / "_build")},
+        )
 
     # Make sure the detected compiler comes from our prefix
-    logs = _get_meson_logs(tmp_path / "build")
+    logs = _get_meson_logs(tmp_path / "_build")
     if sys.platform != "win32":  # pkg-config not used in Windows
         assert str(pkg_config) in logs
 
