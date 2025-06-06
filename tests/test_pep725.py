@@ -40,8 +40,9 @@ def test_limited_api_pep725(
 
     with in_git_repo_context():
         wheel_path = tmp_path / mesonpy.build_wheel(tmp_path)
-    out, err = capfd.readouterr()
-    assert pkg_config in out + err
+    if sys.platform != "win32":  # pkg-config not used in Windows
+        out, err = capfd.readouterr()
+        assert pkg_config in out + err
 
     conda_env.pip("install", wheel_path)
     output = conda_env.python("-c", "import module; print(module.add(1, 2))")
@@ -61,8 +62,9 @@ def test_link_against_local_lib_pep725(
 
     with in_git_repo_context():
         wheel_path = tmp_path / mesonpy.build_wheel(tmp_path)
-    out, err = capfd.readouterr()
-    assert pkg_config in out + err
+    if sys.platform != "win32":  # pkg-config not used in Windows
+        out, err = capfd.readouterr()
+        assert pkg_config in out + err
 
     conda_env.pip("install", wheel_path, "-vvv")
 
