@@ -34,9 +34,25 @@ def _install_external(
     return process
 
 
-def _activate_env(prefix: Path, tmp_path: Path, monkeypatch) -> dict[str, str]:
-    hookfile = tmp_path / ("__hook.bat" if sys.platform == "win32" else "__hook.sh")
-    shelltype = "cmd.exe" if sys.platform == "win32" else "bash"
+def _activate_env(prefix: Path, tmp_path: Path, monkeypatch: MonkeyPatch):
+    """
+    Mimics environment activation by generating the activation 'hook' (the code
+    that runs when a user types 'micromamba activate <prefix>') and a little Python
+    reporter that writes the new and modified to a json file. This file is then
+    read and applied to the test scope with 'monkeypatch'.
+    """
+    if sys.platform == "win32":
+        shell = "cmd.exe"
+        script_ext = "bat"
+        exe = ".exe"
+        call = "CALL "
+    else:
+        shell = "bash"
+        script_ext = "sh"
+        exe = call = ""
+    hookfile = tmp_path / f"__hook.{script_ext}"
+    # 'micromamba shell activate' prints the shell logic that would have run in the
+    # real 'micromamba activate' command
     hook = subprocess.check_output(
         [
             "micromamba",
@@ -45,22 +61,24 @@ def _activate_env(prefix: Path, tmp_path: Path, monkeypatch) -> dict[str, str]:
             "--prefix",
             prefix,
             "--shell",
-            shelltype,
+            shell,
         ],
         text=True,
+        env=os.environ.copy(),
     )
     outputfile = tmp_path / "__output.json"
-    maybe_call = "CALL " if sys.platform == "win32" else ""
-    maybe_exe = ".exe" if sys.platform == "win32" else ""
     hookfile.write_text(
-        f"{maybe_call}{hook}\n"
-        + f'{maybe_call}python{maybe_exe} -c "import json, os; print(json.dumps(dict(**os.environ)))" > "{outputfile}"'
+        f"{call}{hook}\n"
+        # Report the changes in os.environ to a temporary file
+        + f'{call}python{exe} -c "import json, os; print(json.dumps(dict(**os.environ)))" > "{outputfile}"'
     )
-    if sys.platform == "win32":
-        subprocess.run(["cmd.exe", "/D", "/C", f"CALL {hookfile}"], check=True)
-    else:
-        subprocess.run(["bash", hookfile], check=True)
+    subprocess.run([shell, hookfile], check=True)
+    # Recover and apply the os.environ changes to the running test; delete keys not present
+    # in the activated environment, add/overwrite the ones that do appear.
     env = json.loads(outputfile.read_text())
+    for key in os.environ:
+        if key not in env:
+            monkeypatch.delenv(key)
     for key, value in env.items():
         monkeypatch.setenv(key, value)
 
