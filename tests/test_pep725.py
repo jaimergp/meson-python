@@ -55,6 +55,7 @@ def _activate_env(prefix: Path, tmp_path: Path, monkeypatch: MonkeyPatch):
     hookfile = tmp_path / f"__hook.{script_ext}"
     # 'micromamba shell activate' prints the shell logic that would have run in the
     # real 'micromamba activate' command
+    environ = os.environ.copy()
     hook = subprocess.check_output(
         [
             "micromamba",
@@ -66,7 +67,7 @@ def _activate_env(prefix: Path, tmp_path: Path, monkeypatch: MonkeyPatch):
             shell,
         ],
         text=True,
-        env=os.environ.copy(),
+        env=environ,
     )
     outputfile = tmp_path / "__output.json"
     hookfile.write_text(
@@ -74,7 +75,7 @@ def _activate_env(prefix: Path, tmp_path: Path, monkeypatch: MonkeyPatch):
         # Report the changes in os.environ to a temporary file
         + f'{call}python{exe} -c "import json, os; print(json.dumps(dict(**os.environ)))" > "{outputfile}"'
     )
-    subprocess.run([shell, *args, hookfile], check=True)
+    subprocess.run([shell, *args, hookfile], check=True, env=environ)
     # Recover and apply the os.environ changes to the running test; delete keys not present
     # in the activated environment, add/overwrite the ones that do appear.
     env = json.loads(outputfile.read_text())
