@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2025 The meson-python developers
 #
 # SPDX-License-Identifier: MIT
+import json
+import os
 import platform
 import shutil
 import subprocess
@@ -9,6 +11,7 @@ import sys
 from pathlib import Path
 
 from pyproject_external import External
+from pytest import MonkeyPatch
 
 import mesonpy
 
@@ -20,19 +23,51 @@ from .conftest import in_git_repo_context
 def _install_external(
     env_dir: Path,
     directory: Path,
+    monkeypatch: MonkeyPatch,
     ecosystem: str = "conda-forge",
 ) -> subprocess.CompletedProcess:
     external = External.from_pyproject_path(directory / "pyproject.toml")
     cmd = external.install_command(ecosystem=ecosystem, package_manager="micromamba")
     cmd.append(f"--prefix={env_dir}")
-    return subprocess.run(cmd, check=True)
+    process = subprocess.run(cmd, check=True)
+    _activate_env(Path(str(env_dir)), Path(str(env_dir)), monkeypatch)
+    return process
+
+
+def _activate_env(prefix: Path, tmp_path: Path, monkeypatch) -> dict[str, str]:
+    hookfile = tmp_path / ("__hook.bat" if sys.platform == "win32" else "__hook.sh")
+    shelltype = "cmd.exe" if sys.platform == "win32" else "bash"
+    hook = subprocess.check_output(
+        [
+            "micromamba",
+            "shell",
+            "activate",
+            "--prefix",
+            prefix,
+            "--shell",
+            shelltype,
+        ],
+        text=True,
+    )
+    outputfile = tmp_path / "__output.json"
+    hookfile.write_text(
+        f"{'CALL ' if sys.platform == 'win32' else ''}{hook}\n"
+        + f"python -c 'import json, os; print(json.dumps(dict(**os.environ)))' > '{outputfile}'"
+    )
+    if sys.platform == "win32":
+        subprocess.run(["cmd.exe", "/D", "/C", f"CALL {hookfile}"], check=True)
+    else:
+        subprocess.run(["bash", hookfile], check=True)
+    env = json.loads(outputfile.read_text())
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
 
 
 def _assert_package_installed(package: str, prefix: Path) -> Path:
     prefix = Path(str(prefix))
     if package == "<c-compiler>":
         if sys.platform.startswith("linux"):
-            pkg = (prefix / "bin" / "gcc")
+            pkg = prefix / "bin" / "gcc"
         elif sys.platform == "darwin":
             pkg = next((prefix / "bin").glob(f"{platform.machine()}-*-clang"))
         else:
@@ -54,8 +89,9 @@ def test_limited_api_pep725(
     tmp_path: Path,
     conda_env: CondaEnv,
     package_limited_api_pep725,
+    monkeypatch: MonkeyPatch,
 ):
-    _install_external(conda_env, package_limited_api_pep725)
+    _install_external(conda_env, package_limited_api_pep725, monkeypatch)
     pkg_config = _assert_package_installed("pkg-config", conda_env)
     compiler = _assert_package_installed("<c-compiler>", conda_env)
     resolved_compiler = compiler.resolve() if compiler else None
@@ -81,8 +117,9 @@ def test_link_against_local_lib_pep725(
     tmp_path: Path,
     conda_env: CondaEnv,
     package_link_against_local_lib_pep725,
+    monkeypatch: MonkeyPatch,
 ):
-    _install_external(conda_env, package_link_against_local_lib_pep725)
+    _install_external(conda_env, package_link_against_local_lib_pep725, monkeypatch)
     pkg_config = _assert_package_installed("pkg-config", conda_env)
     compiler = _assert_package_installed("<c-compiler>", conda_env)
     resolved_compiler = compiler.resolve() if compiler else None
