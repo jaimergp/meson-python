@@ -50,9 +50,11 @@ def _activate_env(prefix: Path, tmp_path: Path, monkeypatch) -> dict[str, str]:
         text=True,
     )
     outputfile = tmp_path / "__output.json"
+    maybe_call = "CALL " if sys.platform == "win32" else ""
+    maybe_exe = ".exe" if sys.platform == "win32" else ""
     hookfile.write_text(
-        f"{'CALL ' if sys.platform == 'win32' else ''}{hook}\n"
-        + f"python -c 'import json, os; print(json.dumps(dict(**os.environ)))' > '{outputfile}'"
+        f"{maybe_call}{hook}\n"
+        + f'{maybe_call}python{maybe_exe} -c "import json, os; print(json.dumps(dict(**os.environ)))" > "{outputfile}"'
     )
     if sys.platform == "win32":
         subprocess.run(["cmd.exe", "/D", "/C", f"CALL {hookfile}"], check=True)
