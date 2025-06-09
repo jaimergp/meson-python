@@ -102,6 +102,10 @@ def _assert_package_installed(package: str, prefix: Path) -> Path:
     return pkg
 
 
+def _fix_wheel(wheel_path: Path) -> None:
+    subprocess.run(["repairwheel", "-o", wheel_path.parent, "--no-sys-paths", wheel_path], check=True)
+
+
 def _get_meson_logs(build_dir: Path) -> str:
     return (build_dir / "meson-logs" / "meson-log.txt").read_text()
 
@@ -188,6 +192,7 @@ def test_demo_pep_639_725_770(
             check=True,
         )
         wheel_path = next((tmp_path / "_dist").glob("*.whl"))
+        _fix_wheel(wheel_path)
 
     # Make sure the detected compiler comes from our prefix
     logs = _get_meson_logs(tmp_path / "_build")

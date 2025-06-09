@@ -52,6 +52,7 @@ test = [
   'wheel',
   'typing-extensions >= 3.7.4; python_version < "3.11"',
   'pyproject-external @ git+https://github.com/jaimergp/pyproject-external.git',
+  'repairwheel',
 ]
 docs = [
   'furo >= 2024.08.06',
