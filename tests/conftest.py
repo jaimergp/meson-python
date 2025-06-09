@@ -133,7 +133,7 @@ class CondaEnv:
     def __init__(self, env_dir: pathlib.Path):
         self._env_dir = env_dir
         pyver = f"{sys.version_info.major}.{sys.version_info.minor}"
-        subprocess.run(["micromamba", "create", "--prefix", env_dir, f"python={pyver}", "pip"])
+        subprocess.run(["micromamba", "create", "--yes", "--prefix", env_dir, f"python={pyver}", "pip"])
         if sys.platform == "win32":
             self.executable = env_dir / "python.exe"
         else:
@@ -158,7 +158,7 @@ def venv(tmp_path_factory) -> VEnv:
 
 
 @pytest.fixture()
-def conda_env(tmp_path_factory, monkeypatch) -> CondaEnv:
+def conda_env(tmp_path_factory) -> CondaEnv:
     path = pathlib.Path(tmp_path_factory.mktemp('mesonpy-test-conda-env'))
     return CondaEnv(path)
 

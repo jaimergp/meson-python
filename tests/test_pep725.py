@@ -11,13 +11,11 @@ import sys
 from pathlib import Path
 
 from pyproject_external import External
-from pytest import MonkeyPatch
+from pytest import MonkeyPatch, TempPathFactory
 
 import mesonpy
 
-from tests.conftest import CondaEnv
-
-from .conftest import in_git_repo_context
+from .conftest import CondaEnv, in_git_repo_context
 
 
 def _install_external(
@@ -159,7 +157,60 @@ def test_link_against_local_lib_pep725(
         assert compiler.name in logs or resolved_compiler.name in logs
         assert str(pkg_config) in logs
 
-    conda_env.pip("install", wheel_path, "-vvv")
+    conda_env.pip("install", wheel_path)
 
     output = conda_env.python("-c", "import example; print(example.example_sum(1, 2))")
     assert int(output) == 3
+
+
+def test_demo_pep_639_725_770(
+    tmp_path: Path,
+    tmp_path_factory: TempPathFactory,
+    conda_env: CondaEnv,
+    package_demo_pep_639_725_770,
+    monkeypatch: MonkeyPatch,
+):
+    _install_external(conda_env, package_demo_pep_639_725_770, monkeypatch)
+    compiler = _assert_package_installed("<c-compiler>", conda_env)
+    resolved_compiler = compiler.resolve() if compiler else None
+
+    with in_git_repo_context():
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "build",
+                "--wheel",
+                f"--outdir={tmp_path / '_dist'}",
+                f"-Cbuild-dir={tmp_path / '_build'}",
+                ".",
+            ],
+            check=True,
+        )
+        wheel_path = next((tmp_path / "_dist").glob("*.whl"))
+
+    # Make sure the detected compiler comes from our prefix
+    logs = _get_meson_logs(tmp_path / "_build")
+    if sys.platform != "win32":  # pkg-config not used in Windows
+        assert compiler.name in logs or resolved_compiler.name in logs
+
+    # New test environment
+    test_env = CondaEnv(tmp_path_factory.mktemp("mesonpy-test-conda-env"))
+    print(test_env.pip("install", wheel_path))
+
+    assert (
+        test_env.python(
+            "-c",
+            "from demo_pep_639_725_770 import strsum; print(strsum('1000', '1000'))",
+        ).strip()
+        == "2000"
+    )
+
+    output = test_env.python(
+        "-c",
+        "from importlib.metadata import files; import json; print(json.dumps(files('demo_pep_639_725_770'), default=str))",
+    )
+    files = json.loads(output)
+    assert "demo_pep_639_725_770-0.1.0.dist-info/licenses/LICENSES/MIT.txt" in files
+    assert "demo_pep_639_725_770-0.1.0.dist-info/licenses/LICENSES/BSD-3-Clause.txt" in files
+    assert "demo_pep_639_725_770-0.1.0.dist-info/sboms/demo_pep_639_725_770.spdx.json" in files
