@@ -9,10 +9,12 @@ on:
     branches:
       - main
       - release-*
+      - pep725
   pull_request:
     branches:
       - main
       - release-*
+      - pep725
     paths:
       # This is spelt like this to do not ignore the docs/examples/ folder.
       - '**'
