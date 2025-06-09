@@ -12,7 +12,7 @@ py.install_sources(
     subdir: 'demo_pep_639_725_770',
 )
 
-gmp = dependency('gmp', required: true, static: true)
+gmp = dependency('gmp', required: true)
 
 array_ops_module = py.extension_module(
     '_gmp_ops',
