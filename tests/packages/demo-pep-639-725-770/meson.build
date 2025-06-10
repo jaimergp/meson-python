@@ -23,6 +23,7 @@ array_ops_module = py.extension_module(
     subdir: 'demo_pep_639_725_770'
 )
 
+# FUTURE: Revisit once https://github.com/mesonbuild/meson-python/issues/763 is implemented
 install_subdir(
     'sboms/',
     install_dir: join_paths(
