@@ -1,3 +1,5 @@
+#: schema ./pep725+pyproject.schema.json
+
 # pyproject.toml
 [build-system]
 requires = ["meson-python>=0.15.0"]
@@ -12,8 +14,9 @@ dependencies = []
 license = 'MIT OR BSD-3-Clause'
 license-files = ['LICENSES/*']
 
-# PEP 770: Software Bill-of-Materials (SBOM)
+# TODO: PEP 770: Software Bill-of-Materials (SBOM)
 # are added manually to .dist-info in meson.build
+# See https://github.com/mesonbuild/meson-python/issues/763
 
 # PEP 725:
 [external]
@@ -24,3 +27,15 @@ build-requires = [
 host-requires = [
     "dep:generic/gmp",
 ]
+# Items below just added for schema demonstration purposes
+dependencies = []
+
+[external.optional-build-requires]
+extra = []
+
+[external.optional-host-requires]
+extra = []
+
+[external.optional-dependencies]
+extra = []
+
