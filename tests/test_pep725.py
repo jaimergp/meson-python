@@ -226,3 +226,5 @@ def test_demo_pep_639_725_770(
     assert "demo_pep_639_725_770-0.1.0.dist-info/licenses/LICENSES/MIT.txt" in files
     assert "demo_pep_639_725_770-0.1.0.dist-info/licenses/LICENSES/BSD-3-Clause.txt" in files
     assert "demo_pep_639_725_770-0.1.0.dist-info/sboms/demo_pep_639_725_770.spdx.json" in files
+    assert "demo_pep_639_725_770-0.1.0.dist-info/sboms/six.spdx.json" in files
+    assert "demo_pep_639_725_770-0.1.0.dist-info/sboms/gmp.spdx.json" in files
