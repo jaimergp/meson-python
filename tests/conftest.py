@@ -129,10 +129,38 @@ class VEnv(EnvBuilder):
         return self.python('-m', 'pip', *args)
 
 
+class CondaEnv:
+    def __init__(self, env_dir: pathlib.Path):
+        self._env_dir = env_dir
+        pyver = f"{sys.version_info.major}.{sys.version_info.minor}"
+        subprocess.run(["micromamba", "create", "--yes", "--prefix", env_dir, f"python={pyver}", "pip"])
+        if sys.platform == "win32":
+            self.executable = env_dir / "python.exe"
+        else:
+            self.executable = env_dir / "bin" / "python"
+
+    def python(self, *args: str):
+        return subprocess.check_output([self.executable, *args]).decode()
+
+    def pip(self, *args: str):
+        return self.python('-m', 'pip', *args)
+
+    def __str__(self) -> str:
+        return str(self._env_dir)
+
+    __fspath__ = __repr__ = __str__
+
+
 @pytest.fixture()
-def venv(tmp_path_factory):
+def venv(tmp_path_factory) -> VEnv:
     path = pathlib.Path(tmp_path_factory.mktemp('mesonpy-test-venv'))
     return VEnv(path)
+
+
+@pytest.fixture()
+def conda_env(tmp_path_factory) -> CondaEnv:
+    path = pathlib.Path(tmp_path_factory.mktemp('mesonpy-test-conda-env'))
+    return CondaEnv(path)
 
 
 def generate_package_fixture(package):

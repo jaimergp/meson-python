@@ -51,6 +51,8 @@ test = [
   'cython >= 3.0.3', # required for Python 3.12 support
   'wheel',
   'typing-extensions >= 3.7.4; python_version < "3.11"',
+  'pyproject-external @ git+https://github.com/jaimergp/pyproject-external.git',
+  'repairwheel',
 ]
 docs = [
   'furo >= 2024.08.06',

@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2023 The meson-python developers
+#
+# SPDX-License-Identifier: MIT
+
+[build-system]
+build-backend = 'mesonpy'
+requires = ['meson-python']
+
+[tool.meson-python]
+limited-api = true
+
+[external]
+build-requires = ['dep:virtual/compiler/c', 'dep:generic/pkg-config']

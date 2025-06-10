@@ -1,0 +1,230 @@
+# SPDX-FileCopyrightText: 2025 The meson-python developers
+#
+# SPDX-License-Identifier: MIT
+import json
+import os
+import platform
+import shutil
+import subprocess
+import sys
+
+from pathlib import Path
+
+from pyproject_external import External
+from pytest import MonkeyPatch, TempPathFactory
+
+import mesonpy
+
+from .conftest import CondaEnv, in_git_repo_context
+
+
+def _install_external(
+    env_dir: Path,
+    directory: Path,
+    monkeypatch: MonkeyPatch,
+    ecosystem: str = "conda-forge",
+) -> subprocess.CompletedProcess:
+    external = External.from_pyproject_path(directory / "pyproject.toml")
+    cmd = external.install_command(ecosystem=ecosystem, package_manager="micromamba")
+    cmd.append(f"--prefix={env_dir}")
+    process = subprocess.run(cmd, check=True)
+    _activate_env(Path(str(env_dir)), Path(str(env_dir)), monkeypatch)
+    return process
+
+
+def _activate_env(prefix: Path, tmp_path: Path, monkeypatch: MonkeyPatch):
+    """
+    Mimics environment activation by generating the activation 'hook' (the code
+    that runs when a user types 'micromamba activate <prefix>') and a little Python
+    reporter that writes the new and modified to a json file. This file is then
+    read and applied to the test scope with 'monkeypatch'.
+    """
+    if sys.platform == "win32":
+        shell = "cmd.exe"
+        script_ext = "bat"
+        exe = ".exe"
+        call = "CALL "
+        args = ("/D", "/C")
+    else:
+        shell = "bash"
+        script_ext = "sh"
+        exe = call = ""
+        args = ()
+    hookfile = tmp_path / f"__hook.{script_ext}"
+    # 'micromamba shell activate' prints the shell logic that would have run in the
+    # real 'micromamba activate' command
+    environ = os.environ.copy()
+    hook = subprocess.check_output(
+        [
+            "micromamba",
+            "shell",
+            "activate",
+            "--prefix",
+            prefix,
+            "--shell",
+            shell,
+        ],
+        text=True,
+        env=environ,
+    )
+    outputfile = tmp_path / "__output.json"
+    hookfile.write_text(
+        f"{call}{hook}\n"
+        # Report the changes in os.environ to a temporary file
+        + f'{call}python{exe} -c "import json, os; print(json.dumps(dict(**os.environ)))" > "{outputfile}"'
+    )
+    subprocess.run([shell, *args, hookfile], check=True, env=environ)
+    # Recover and apply the os.environ changes to the running test; delete keys not present
+    # in the activated environment, add/overwrite the ones that do appear.
+    env = json.loads(outputfile.read_text())
+    for key in os.environ:
+        if key not in env:
+            monkeypatch.delenv(key)
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+
+
+def _assert_package_installed(package: str, prefix: Path) -> Path:
+    prefix = Path(str(prefix))
+    if package == "<c-compiler>":
+        if sys.platform.startswith("linux"):
+            pkg = prefix / "bin" / "gcc"
+        elif sys.platform == "darwin":
+            pkg = next((prefix / "bin").glob(f"{platform.machine()}-*-clang"))
+        else:
+            return
+    else:
+        pkg = shutil.which(package)
+    assert pkg is not None
+    pkg = Path(pkg)
+    assert pkg.is_file()
+    assert str(prefix) in str(pkg)
+    return pkg
+
+
+def _fix_wheel(wheel_path: Path, prefix: Path) -> None:
+    if sys.platform.startswith("win"):
+        args = ("--lib-dir", prefix / "Library" / "bin")
+    else:
+        args = ()
+    subprocess.run(
+        ["repairwheel", "-o", wheel_path.parent, "--no-sys-paths", *args, wheel_path],
+        check=True,
+    )
+
+
+def _get_meson_logs(build_dir: Path) -> str:
+    return (build_dir / "meson-logs" / "meson-log.txt").read_text()
+
+
+def test_limited_api_pep725(
+    tmp_path: Path,
+    conda_env: CondaEnv,
+    package_limited_api_pep725,
+    monkeypatch: MonkeyPatch,
+):
+    _install_external(conda_env, package_limited_api_pep725, monkeypatch)
+    pkg_config = _assert_package_installed("pkg-config", conda_env)
+    compiler = _assert_package_installed("<c-compiler>", conda_env)
+    resolved_compiler = compiler.resolve() if compiler else None
+
+    with in_git_repo_context():
+        wheel_path = tmp_path / mesonpy.build_wheel(
+            tmp_path,
+            config_settings={"build-dir": str(tmp_path / "_build")},
+        )
+
+    # Make sure the detected compiler comes from our prefix
+    logs = _get_meson_logs(tmp_path / "_build")
+    if sys.platform != "win32":  # pkg-config not used in Windows
+        assert compiler.name in logs or resolved_compiler.name in logs
+        assert str(pkg_config) in logs
+
+    conda_env.pip("install", wheel_path)
+    output = conda_env.python("-c", "import module; print(module.add(1, 2))")
+    assert int(output) == 3
+
+
+def test_link_against_local_lib_pep725(
+    tmp_path: Path,
+    conda_env: CondaEnv,
+    package_link_against_local_lib_pep725,
+    monkeypatch: MonkeyPatch,
+):
+    _install_external(conda_env, package_link_against_local_lib_pep725, monkeypatch)
+    pkg_config = _assert_package_installed("pkg-config", conda_env)
+    compiler = _assert_package_installed("<c-compiler>", conda_env)
+    resolved_compiler = compiler.resolve() if compiler else None
+
+    with in_git_repo_context():
+        wheel_path = tmp_path / mesonpy.build_wheel(
+            tmp_path,
+            config_settings={"build-dir": str(tmp_path / "_build")},
+        )
+
+    # Make sure the detected compiler comes from our prefix
+    logs = _get_meson_logs(tmp_path / "_build")
+    if sys.platform != "win32":  # pkg-config not used in Windows
+        assert compiler.name in logs or resolved_compiler.name in logs
+        assert str(pkg_config) in logs
+
+    conda_env.pip("install", wheel_path)
+
+    output = conda_env.python("-c", "import example; print(example.example_sum(1, 2))")
+    assert int(output) == 3
+
+
+def test_demo_pep_639_725_770(
+    tmp_path: Path,
+    tmp_path_factory: TempPathFactory,
+    conda_env: CondaEnv,
+    package_demo_pep_639_725_770,
+    monkeypatch: MonkeyPatch,
+):
+    _install_external(conda_env, package_demo_pep_639_725_770, monkeypatch)
+    compiler = _assert_package_installed("<c-compiler>", conda_env)
+    resolved_compiler = compiler.resolve() if compiler else None
+
+    with in_git_repo_context():
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "build",
+                "--wheel",
+                f"--outdir={tmp_path / '_dist'}",
+                f"-Cbuild-dir={tmp_path / '_build'}",
+                ".",
+            ],
+            check=True,
+        )
+        wheel_path = next((tmp_path / "_dist").glob("*.whl"))
+        _fix_wheel(wheel_path, Path(str(conda_env)))
+
+    # Make sure the detected compiler comes from our prefix
+    logs = _get_meson_logs(tmp_path / "_build")
+    if sys.platform != "win32":  # pkg-config not used in Windows
+        assert compiler.name in logs or resolved_compiler.name in logs
+
+    # New test environment
+    test_env = CondaEnv(tmp_path_factory.mktemp("mesonpy-test-conda-env"))
+    print(test_env.pip("install", wheel_path))
+
+    assert (
+        test_env.python(
+            "-c",
+            "from demo_pep_639_725_770 import strsum; print(strsum('1000', '1000'))",
+        ).strip()
+        == "2000"
+    )
+
+    output = test_env.python(
+        "-c",
+        "from importlib.metadata import files; import json; print(json.dumps(files('demo_pep_639_725_770'), default=str))",
+    )
+    files = json.loads(output)
+    assert "demo_pep_639_725_770-0.1.0.dist-info/licenses/LICENSES/MIT.txt" in files
+    assert "demo_pep_639_725_770-0.1.0.dist-info/licenses/LICENSES/BSD-3-Clause.txt" in files
+    assert "demo_pep_639_725_770-0.1.0.dist-info/sboms/demo_pep_639_725_770.spdx.json" in files
+    assert "demo_pep_639_725_770-0.1.0.dist-info/sboms/six.spdx.json" in files
+    assert "demo_pep_639_725_770-0.1.0.dist-info/sboms/gmp.spdx.json" in files
